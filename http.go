@@ -10,6 +10,7 @@ import (
 	"github.com/portcullis/application/modules/logging"
 	"github.com/renevo/bootstrap/modules/env"
 	"github.com/renevo/bootstrap/modules/http"
+	"github.com/renevo/bootstrap/modules/otel"
 )
 
 // HTTP bootstraps a new http application and runs it
@@ -23,6 +24,7 @@ func HTTP(name, version string, content fs.FS, opts ...application.Option) error
 	// in built modules
 	app.Controller.Add("Logging", logging.New())
 	app.Controller.Add("Environment", env.New("", map[string]string{}))
+	app.Controller.Add("Telemetry", otel.New())
 	app.Controller.Add("HTTP", http.New(content))
 
 	// flag handling

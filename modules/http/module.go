@@ -6,13 +6,16 @@ import (
 	"io/fs"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/portcullis/application"
 	"github.com/portcullis/logging"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 )
 
 type module struct {
@@ -59,8 +62,11 @@ func (m *module) Start(ctx context.Context) error {
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
 		},
-		Handler: router,
+		Handler: handlers.CombinedLoggingHandler(os.Stderr, router),
 	}
+
+	// panic handling
+	router.Use(handlers.RecoveryHandler(handlers.PrintRecoveryStack(true)))
 
 	// default headers
 	router.Use(func(next http.Handler) http.Handler {
@@ -70,6 +76,9 @@ func (m *module) Start(ctx context.Context) error {
 			next.ServeHTTP(w, r)
 		})
 	})
+
+	// proxy support
+	router.Use(handlers.ProxyHeaders)
 
 	// health check endpoint
 	router.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -81,9 +90,8 @@ func (m *module) Start(ctx context.Context) error {
 		router.PathPrefix("/").Handler(http.FileServer(http.FS(m.content)))
 	}
 
-	// TODO: logging
-
-	// TODO: metrics
+	// tracing
+	router.Use(otelmux.Middleware(application.FromContext(ctx).Name))
 
 	// listener
 	// TODO: support unix://
@@ -97,6 +105,8 @@ func (m *module) Start(ctx context.Context) error {
 	} else {
 		m.listener = listener
 	}
+
+	logging.FromContext(ctx).Info("HTTP Server Listening: http://%s", m.listener.Addr().String())
 
 	go func() {
 		err := m.server.Serve(m.listener)
