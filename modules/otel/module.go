@@ -44,6 +44,7 @@ func (m *module) Start(ctx context.Context) error {
 		resource.WithAttributes(
 			// the service name used to display traces in backends
 			semconv.ServiceNameKey.String(app.Name),
+			semconv.ServiceVersionKey.String(app.Version),
 		),
 	)
 

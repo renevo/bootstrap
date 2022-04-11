@@ -62,7 +62,7 @@ func (m *module) Start(ctx context.Context) error {
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
 		},
-		Handler: handlers.CombinedLoggingHandler(os.Stderr, router),
+		Handler: handlers.CombinedLoggingHandler(os.Stderr, handlers.ProxyHeaders(router)),
 	}
 
 	// panic handling
@@ -77,9 +77,6 @@ func (m *module) Start(ctx context.Context) error {
 		})
 	})
 
-	// proxy support
-	router.Use(handlers.ProxyHeaders)
-
 	// health check endpoint
 	router.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
@@ -91,6 +88,11 @@ func (m *module) Start(ctx context.Context) error {
 	}
 
 	// tracing
+	// TODO: add cloud flare headers as span attributes
+	// Cf-Ray (ID)
+	// Cf-Ipcountry
+	// Cf-Connecting-Ip
+	// Cf-Warp-Tag-Id
 	router.Use(otelmux.Middleware(application.FromContext(ctx).Name))
 
 	// listener
