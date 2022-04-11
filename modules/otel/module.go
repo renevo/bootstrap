@@ -21,6 +21,7 @@ type module struct {
 	}
 }
 
+// New returns an application module that will wire up the trace exporter as per configured in the environment
 func New() application.Module {
 	return &module{}
 }
@@ -61,8 +62,7 @@ func (m *module) Start(ctx context.Context) error {
 		return errors.Wrapf(err, "failed to create grpc trace exporter")
 	}
 
-	// Register the trace exporter with a TracerProvider, using a batch
-	// span processor to aggregate spans before export.
+	// Register the trace exporter with a TracerProvider, using a batch span processor to aggregate spans before export.
 	bsp := sdktrace.NewBatchSpanProcessor(traceExporter)
 	tracerProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
