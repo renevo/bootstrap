@@ -14,6 +14,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
 	"github.com/portcullis/application"
+	"github.com/portcullis/config"
 	"github.com/portcullis/logging"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 )
@@ -25,7 +26,7 @@ type module struct {
 
 	cfg struct {
 		HTTP struct {
-			Addr            string        `config:"address,label" env:"HTTP_ADDRESS"`
+			Addr            string        `config:"address,label" env:"HTTP_ADDRESS" flag:"address" setting:"Address" description:"The address to listen for the http server"`
 			ReadTimeout     time.Duration `config:"read_timeout,optional"`
 			WriteTimeout    time.Duration `config:"write_timeout,optional"`
 			IdleTimeout     time.Duration `config:"idle_timeout,optional"`
@@ -43,6 +44,8 @@ func New(content fs.FS) application.Module {
 	hm.cfg.HTTP.ReadTimeout = 5 * time.Second
 	hm.cfg.HTTP.WriteTimeout = 10 * time.Second
 	hm.cfg.HTTP.ShutdownTimeout = 30 * time.Second
+
+	config.Subset("HTTP").Bind(&hm.cfg.HTTP)
 
 	return hm
 }
@@ -120,7 +123,13 @@ func (m *module) Start(ctx context.Context) error {
 				return
 			}
 
-			// app package needs an err handler `app.Error(err)` to do normalized shutdown instead of inline panics
+			app := application.FromContext(ctx)
+			if app != nil {
+				app.Exit(errors.Wrap(err, "http server failed to serve"))
+				return
+			}
+
+			// can't gracefully shutdown, so just die
 			logging.Fatal("HTTP Serve Failure: %v", err)
 		}
 	}()

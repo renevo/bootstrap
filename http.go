@@ -21,20 +21,25 @@ func HTTP(name, version string, content fs.FS, opts ...application.Option) error
 		Controller: &application.Controller{},
 	}
 
+	// initialize flags before constructing modules to allow them to register config
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	flag.CommandLine = fs
+
 	// in built modules
 	app.Controller.Add("Logging", logging.New())
 	app.Controller.Add("Environment", env.New("", map[string]string{}))
 	app.Controller.Add("Telemetry", otel.New())
 	app.Controller.Add("HTTP", http.New(content))
 
-	// flag handling
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	// global application flags
 	cfgFile := fs.String("config", "", "Application configuration file")
 
+	// parse them
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		return err
 	}
 
+	// if we have a configuration file, then pass it in to get parsed/processed
 	if *cfgFile != "" {
 		application.WithConfigFile(*cfgFile)(app)
 	}
