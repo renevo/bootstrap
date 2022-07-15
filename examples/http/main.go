@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"net/http"
 
 	"github.com/renevo/bootstrap"
 )
@@ -10,7 +11,7 @@ import (
 var content embed.FS
 
 func main() {
-	if err := bootstrap.HTTP("test", "0.0.0", content); err != nil {
+	if err := bootstrap.HTTP("test", "0.0.0", http.FS(content)); err != nil {
 		panic(err)
 	}
 }

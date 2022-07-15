@@ -3,8 +3,9 @@ package bootstrap
 import (
 	"context"
 	"flag"
-	"io/fs"
 	"os"
+
+	gohttp "net/http"
 
 	"github.com/portcullis/application"
 	"github.com/portcullis/application/modules/logging"
@@ -14,7 +15,7 @@ import (
 )
 
 // HTTP bootstraps a new http application and runs it
-func HTTP(name, version string, content fs.FS, opts ...application.Option) error {
+func HTTP(name, version string, content gohttp.FileSystem, opts ...application.Option) error {
 	app := &application.Application{
 		Name:       name,
 		Version:    version,

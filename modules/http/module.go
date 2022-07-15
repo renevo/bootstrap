@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"io/fs"
 	"net"
 	"net/http"
 	"os"
@@ -20,7 +19,7 @@ import (
 )
 
 type module struct {
-	content  fs.FS
+	content  http.FileSystem
 	listener net.Listener
 	server   *http.Server
 
@@ -36,7 +35,7 @@ type module struct {
 }
 
 // New creates a new HTTP server and serves up the specified optional file system at the root
-func New(content fs.FS) application.Module {
+func New(content http.FileSystem) application.Module {
 	hm := &module{content: content}
 
 	hm.cfg.HTTP.Addr = ":8080"
@@ -87,7 +86,7 @@ func (m *module) Start(ctx context.Context) error {
 
 	// if io.FS is set, serve the static files
 	if m.content != nil {
-		router.PathPrefix("/").Handler(http.FileServer(http.FS(m.content)))
+		router.PathPrefix("/").Handler(http.FileServer(m.content))
 	}
 
 	// tracing
