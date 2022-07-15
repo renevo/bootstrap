@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"flag"
 	"io/fs"
 	"net/http"
 	"os"
@@ -14,9 +13,9 @@ import (
 var content embed.FS
 
 func main() {
-	flag.Parse()
-
 	var hfs http.FileSystem
+
+	// using an env here, because there isn't currently a good way in the bootstrap to add a configuration before creating it
 	if staticPath := os.Getenv("HTTP_STATIC_PATH"); staticPath != "" {
 		hfs = http.Dir(staticPath)
 	} else {

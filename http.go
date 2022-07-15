@@ -23,8 +23,15 @@ func HTTP(name, version string, content gohttp.FileSystem, opts ...application.O
 	}
 
 	// initialize flags before constructing modules to allow them to register config
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	flag.CommandLine = fs
+	// see if any flags have been added to the default flagset
+	var hasFlags bool
+	flag.VisitAll(func(*flag.Flag) {
+		hasFlags = true
+	})
+
+	if !hasFlags {
+		flag.CommandLine = flag.NewFlagSet(name, flag.ExitOnError)
+	}
 
 	// in built modules
 	app.Controller.Add("Logging", logging.New())
@@ -33,11 +40,13 @@ func HTTP(name, version string, content gohttp.FileSystem, opts ...application.O
 	app.Controller.Add("HTTP", http.New(content))
 
 	// global application flags
-	cfgFile := fs.String("config", "", "Application configuration file")
+	cfgFile := flag.CommandLine.String("config", "", "Application configuration file")
 
 	// parse them
-	if err := fs.Parse(os.Args[1:]); err != nil {
-		return err
+	if !flag.CommandLine.Parsed() {
+		if err := flag.CommandLine.Parse(os.Args[1:]); err != nil {
+			return err
+		}
 	}
 
 	// if we have a configuration file, then pass it in to get parsed/processed
