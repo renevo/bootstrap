@@ -172,7 +172,8 @@ func (m *module) PostStart(ctx context.Context) error {
 			}
 
 			// can't gracefully shutdown, so just die
-			logging.Fatal("HTTP Serve Failure: %v", err)
+			logging.FromContext(ctx).Critical("HTTP Serve Failure: %v", err)
+			os.Exit(1)
 		}
 	}()
 
