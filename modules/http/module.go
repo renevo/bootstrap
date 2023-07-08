@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/portcullis/application"
 	"github.com/portcullis/config"
 	"github.com/portcullis/logging"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 )
 
@@ -33,6 +35,12 @@ type module struct {
 		} `config:"http,block"`
 	}
 }
+
+var (
+	_ application.PostStarter  = (*module)(nil)
+	_ application.Configurable = (*module)(nil)
+	_ application.Module       = (*module)(nil)
+)
 
 // New creates a new HTTP server and serves up the specified optional file system at the root
 func New(content http.FileSystem) application.Module {
@@ -54,6 +62,10 @@ func (m *module) Config() (interface{}, error) {
 }
 
 func (m *module) Start(ctx context.Context) error {
+	app := application.FromContext(ctx)
+	serverName := app.Name
+	serverVersion := app.Version
+
 	router := mux.NewRouter()
 
 	// setup http server
@@ -73,21 +85,13 @@ func (m *module) Start(ctx context.Context) error {
 	// default headers
 	router.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Server", "RenEvo/1.0")
-
+			w.Header().Set("Server", fmt.Sprintf("%s/%s", serverName, serverVersion))
 			next.ServeHTTP(w, r)
 		})
 	})
 
-	// health check endpoint
-	router.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
-	})
-
-	// if io.FS is set, serve the static files
-	if m.content != nil {
-		router.PathPrefix("/").Handler(http.FileServer(m.content))
-	}
+	// TODO: These 3 routes probably need to be protected on specific addresses/ranges only
+	// for now, they are open to the world, which might not be a great idea
 
 	// tracing
 	// TODO: add cloud flare headers as span attributes
@@ -97,6 +101,45 @@ func (m *module) Start(ctx context.Context) error {
 	// Cf-Warp-Tag-Id
 	router.Use(otelmux.Middleware(application.FromContext(ctx).Name))
 
+	// prometheus metrics endpoint
+	// TODO: Need metrics for mux as the otel gorilla mux doesn't do metrics :/
+	router.Handle("/metrics", promhttp.Handler())
+
+	// health check endpoint
+	router.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	})
+
+	// route registrations from other modules
+	var registrationErr error
+
+	app.Controller.Range(func(name string, appMod application.Module) bool {
+		routable, ok := appMod.(Routable)
+		if !ok {
+			return true
+		}
+
+		if err := routable.Route(ctx, router); err != nil {
+			registrationErr = errors.Wrapf(err, "failed to route for module %q", name)
+			return false
+		}
+
+		return true
+	})
+
+	if registrationErr != nil {
+		return registrationErr
+	}
+
+	// static file hosting
+	if m.content != nil {
+		router.PathPrefix("/").Handler(http.FileServer(m.content))
+	}
+
+	return nil
+}
+
+func (m *module) PostStart(ctx context.Context) error {
 	// listener
 	// TODO: support unix://
 	listener, err := net.Listen("tcp", m.cfg.HTTP.Addr)
@@ -129,7 +172,8 @@ func (m *module) Start(ctx context.Context) error {
 			}
 
 			// can't gracefully shutdown, so just die
-			logging.Fatal("HTTP Serve Failure: %v", err)
+			logging.FromContext(ctx).Critical("HTTP Serve Failure: %v", err)
+			os.Exit(1)
 		}
 	}()
 

@@ -1,7 +1,26 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
 
 <head>
     <title>Hosted with http bootstrap</title>
+    <style>
+        /* default, light mode styling */
+        body {
+            background-color: #fff;
+            color: #000;
+            font-family: Roboto, arial, sans-serif;
+            font-size: 14px;
+        }
+
+        /* if user switches the system settings to dark mode */
+        /* this media query will be applied */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: rgb(32, 33, 36);
+                color: rgb(189, 193, 198);
+            }
+        }
+    </style>
 </head>
 
 <body>
