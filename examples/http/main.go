@@ -42,17 +42,16 @@ func init() {
 }
 
 func main() {
-	var hfs http.FileSystem
+	var dfs fs.FS
 
 	// using an env here, because there isn't currently a good way in the bootstrap to add a configuration before creating it
 	if staticPath := os.Getenv("HTTP_STATIC_PATH"); staticPath != "" {
-		hfs = http.Dir(staticPath)
+		dfs = os.DirFS(staticPath)
 	} else {
-		sfs, _ := fs.Sub(content, "static")
-		hfs = http.FS(sfs)
+		dfs, _ = fs.Sub(content, "static")
 	}
 
-	if err := bootstrap.HTTP(name, version, hfs,
+	if err := bootstrap.HTTP(name, version, http.FS(dfs),
 		application.WithModule("Custom Routes", new(module)),
 	); err != nil {
 		panic(err)

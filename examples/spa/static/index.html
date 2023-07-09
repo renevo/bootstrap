@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Hosted with http bootstrap</title>
+    <style>
+        /* default, light mode styling */
+        body {
+            background-color: #fff;
+            color: #000;
+            font-family: Roboto, arial, sans-serif;
+            font-size: 14px;
+        }
+
+        /* if user switches the system settings to dark mode */
+        /* this media query will be applied */
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-color: rgb(32, 33, 36);
+                color: rgb(189, 193, 198);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <p>Single Page Application Support. The following links will be served up if text/html is requrested, however, if
+        you don't explicitly ask for text/html, the second URL will return a 404.</p>
+    <p><a href="/">Home</a>&nbsp;|&nbsp;<a href="/some/random/path">SPA Path</a></p>
+    <p><img src="/some/random/path.jpg" alt="missing images won't load html spa paths" height="250px" width="250px" />
+    </p>
+</body>
+
+</html>
