@@ -32,6 +32,8 @@ type module struct {
 			WriteTimeout    time.Duration `config:"write_timeout,optional"`
 			IdleTimeout     time.Duration `config:"idle_timeout,optional"`
 			ShutdownTimeout time.Duration `config:"shutdown_timeout,optional"`
+			CertificateFile string        `config:"cert_file,optional" env:"HTTPS_CERTIFICATE" flag:"sslcert" description:"File location for the ssl certificate file"`
+			KeyFile         string        `config:"key_file,optional" env:"HTTPS_KEY" flag:"sslkey" description:"File location for the ssl certificate key file"`
 		} `config:"http,block"`
 	}
 }
@@ -153,10 +155,23 @@ func (m *module) PostStart(ctx context.Context) error {
 		m.listener = listener
 	}
 
-	logging.FromContext(ctx).Info("HTTP Server Listening: http://%s", m.listener.Addr().String())
+	isHTTPS := m.cfg.HTTP.CertificateFile != "" && m.cfg.HTTP.KeyFile != ""
+
+	if isHTTPS {
+		logging.FromContext(ctx).Info("HTTP Server Listening: https://%s", m.listener.Addr().String())
+	} else {
+		logging.FromContext(ctx).Info("HTTP Server Listening: http://%s", m.listener.Addr().String())
+	}
 
 	go func() {
-		err := m.server.Serve(m.listener)
+		var err error
+		if isHTTPS {
+			// TODO: eventually we want to support ACME as well as app loaded certificates like this, let's call this a v0 implementation
+			// https://pkg.go.dev/golang.org/x/crypto/acme/autocert
+			err = m.server.ServeTLS(m.listener, m.cfg.HTTP.CertificateFile, m.cfg.HTTP.KeyFile)
+		} else {
+			err = m.server.Serve(m.listener)
+		}
 
 		// don't panic on server closed
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
