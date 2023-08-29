@@ -3,7 +3,9 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -12,10 +14,8 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 	"github.com/portcullis/application"
 	"github.com/portcullis/config"
-	"github.com/portcullis/logging"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 )
@@ -122,7 +122,7 @@ func (m *module) Start(ctx context.Context) error {
 		}
 
 		if err := routable.Route(ctx, router); err != nil {
-			registrationErr = errors.Wrapf(err, "failed to route for module %q", name)
+			registrationErr = fmt.Errorf("failed to route for module %q: %w", name, err)
 			return false
 		}
 
@@ -146,7 +146,7 @@ func (m *module) PostStart(ctx context.Context) error {
 	// TODO: support unix://
 	listener, err := net.Listen("tcp", m.cfg.HTTP.Addr)
 	if err != nil {
-		return errors.Wrapf(err, "failed to listen on %q", m.cfg.HTTP.Addr)
+		return fmt.Errorf("failed to listen on %q: %w", m.cfg.HTTP.Addr, err)
 	}
 
 	if tcpListener, ok := listener.(*net.TCPListener); ok {
@@ -158,9 +158,9 @@ func (m *module) PostStart(ctx context.Context) error {
 	isHTTPS := m.cfg.HTTP.CertificateFile != "" && m.cfg.HTTP.KeyFile != ""
 
 	if isHTTPS {
-		logging.FromContext(ctx).Info("HTTP Server Listening: https://%s", m.listener.Addr().String())
+		slog.Info("HTTPS Server Listening", "url", fmt.Sprintf("https://%s", m.listener.Addr().String()))
 	} else {
-		logging.FromContext(ctx).Info("HTTP Server Listening: http://%s", m.listener.Addr().String())
+		slog.Info("HTTP Server Listening", "url", fmt.Sprintf("http://%s", m.listener.Addr().String()))
 	}
 
 	go func() {
@@ -176,18 +176,19 @@ func (m *module) PostStart(ctx context.Context) error {
 		// don't panic on server closed
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			// don't panic on not being able to accept connections (dirty/hacky/works)
-			if nopErr, ok := errors.Cause(err).(*net.OpError); ok && (strings.EqualFold(nopErr.Op, "accept") && strings.Contains(nopErr.Error(), "closed network connection")) {
+			var nopErr *net.OpError
+			if errors.As(err, &nopErr) && (strings.EqualFold(nopErr.Op, "accept") && strings.Contains(nopErr.Error(), "closed network connection")) {
 				return
 			}
 
 			app := application.FromContext(ctx)
 			if app != nil {
-				app.Exit(errors.Wrap(err, "http server failed to serve"))
+				app.Exit(fmt.Errorf("http server failed to serve: %w", err))
 				return
 			}
 
 			// can't gracefully shutdown, so just die
-			logging.FromContext(ctx).Critical("HTTP Serve Failure: %v", err)
+			slog.Error("HTTP Serve Failure", "err", err)
 			os.Exit(1)
 		}
 	}()

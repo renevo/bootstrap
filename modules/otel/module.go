@@ -2,9 +2,9 @@ package otel
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/portcullis/application"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -52,13 +52,13 @@ func (m *module) Start(ctx context.Context) error {
 		),
 	)
 	if err != nil {
-		return errors.Wrap(err, "failed to initialize otel resource")
+		return fmt.Errorf("failed to initialize otel resource: %w", err)
 	}
 
 	// metrics
 	metricExporter, err := prometheus.New()
 	if err != nil {
-		return errors.Wrap(err, "failed to create otel prometheus exporter")
+		return fmt.Errorf("failed to create otel prometheus exporter: %w", err)
 	}
 	m.metricExporter = metricExporter
 
@@ -69,12 +69,12 @@ func (m *module) Start(ctx context.Context) error {
 		conn, err := grpc.DialContext(ctx, m.cfg.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 
 		if err != nil {
-			return errors.Wrapf(err, "failed to connect to %q grpc collector", m.cfg.Addr)
+			return fmt.Errorf("failed to connect to %q grpc collector: %w", m.cfg.Addr, err)
 		}
 
 		traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
 		if err != nil {
-			return errors.Wrapf(err, "failed to create grpc trace exporter")
+			return fmt.Errorf("failed to create grpc trace exporter: %w", err)
 		}
 		m.traceExporter = traceExporter
 
@@ -111,7 +111,6 @@ func (m *module) Stop(ctx context.Context) error {
 
 	// shutdown metric exporter
 	if m.metricExporter != nil {
-		_ = m.metricExporter.ForceFlush(shutdownCtx)
 		_ = m.metricExporter.Shutdown(shutdownCtx)
 	}
 	return nil

@@ -2,9 +2,9 @@ package env
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/caarlos0/env/v6"
-	"github.com/pkg/errors"
+	"github.com/caarlos0/env/v9"
 	"github.com/portcullis/application"
 )
 
@@ -38,12 +38,12 @@ func (m *module) Initialize(ctx context.Context) (context.Context, error) {
 		if c, ok := m.(application.Configurable); ok {
 			cfg, err := c.Config()
 			if err != nil {
-				initErr = errors.Wrapf(err, "failed to config for module %q", name)
+				initErr = fmt.Errorf("failed to config for module %q: %w", name, err)
 				return false
 			}
 
-			if err := env.Parse(cfg, opts); err != nil {
-				initErr = errors.Wrapf(err, "failed to parse environment for module %q", name)
+			if err := env.ParseWithOptions(cfg, opts); err != nil {
+				initErr = fmt.Errorf("failed to parse environment for module %q: %w", name, err)
 				return false
 			}
 		}
