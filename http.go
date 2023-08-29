@@ -71,8 +71,6 @@ func HTTP(name, version string, content gohttp.FileSystem, opts ...application.O
 		Logger:     slog.New(logHandler),
 	}
 
-	slog.SetDefault(app.Logger)
-
 	app.Controller.Add("Environment", env.New("", map[string]string{}))
 	app.Controller.Add("Telemetry", otel.New())
 	app.Controller.Add("HTTP", http.New(content))
@@ -89,6 +87,7 @@ func HTTP(name, version string, content gohttp.FileSystem, opts ...application.O
 
 	// add the application name to all logs on this logger
 	app.Logger = app.Logger.With("app", name)
+	slog.SetDefault(app.Logger)
 
 	// run the app
 	return app.Run(context.Background())
