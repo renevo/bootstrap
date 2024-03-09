@@ -21,21 +21,24 @@ import (
 )
 
 type module struct {
+	cfg      *cfg
 	content  http.FileSystem
 	listener net.Listener
 	server   *http.Server
+}
 
-	cfg struct {
-		HTTP struct {
-			Addr            string        `config:"address,label" env:"HTTP_ADDRESS" flag:"address" setting:"Address" description:"The address to listen for the http server"`
-			ReadTimeout     time.Duration `config:"read_timeout,optional"`
-			WriteTimeout    time.Duration `config:"write_timeout,optional"`
-			IdleTimeout     time.Duration `config:"idle_timeout,optional"`
-			ShutdownTimeout time.Duration `config:"shutdown_timeout,optional"`
-			CertificateFile string        `config:"cert_file,optional" env:"HTTPS_CERTIFICATE" flag:"sslcert" description:"File location for the ssl certificate file"`
-			KeyFile         string        `config:"key_file,optional" env:"HTTPS_KEY" flag:"sslkey" description:"File location for the ssl certificate key file"`
-		} `config:"http,block"`
-	}
+type cfg struct {
+	HTTP *httpConfig `config:"http,block"`
+}
+
+type httpConfig struct {
+	Addr            string        `config:"address,label" env:"HTTP_ADDRESS" flag:"address" setting:"Address" description:"The address to listen for the http server"`
+	ReadTimeout     time.Duration `config:"read_timeout,optional"`
+	WriteTimeout    time.Duration `config:"write_timeout,optional"`
+	IdleTimeout     time.Duration `config:"idle_timeout,optional"`
+	ShutdownTimeout time.Duration `config:"shutdown_timeout,optional"`
+	CertificateFile string        `config:"cert_file,optional" env:"HTTPS_CERTIFICATE" flag:"sslcert" description:"File location for the ssl certificate file"`
+	KeyFile         string        `config:"key_file,optional" env:"HTTPS_KEY" flag:"sslkey" description:"File location for the ssl certificate key file"`
 }
 
 var (
@@ -46,21 +49,26 @@ var (
 
 // New creates a new HTTP server and serves up the specified optional file system at the root
 func New(content http.FileSystem) application.Module {
-	hm := &module{content: content}
+	m := &module{
+		content: content,
+		cfg: &cfg{
+			&httpConfig{
+				Addr:            ":8080",
+				IdleTimeout:     120 * time.Second,
+				ReadTimeout:     5 * time.Second,
+				WriteTimeout:    10 * time.Second,
+				ShutdownTimeout: 30 * time.Second,
+			},
+		},
+	}
 
-	hm.cfg.HTTP.Addr = ":8080"
-	hm.cfg.HTTP.IdleTimeout = 120 * time.Second
-	hm.cfg.HTTP.ReadTimeout = 5 * time.Second
-	hm.cfg.HTTP.WriteTimeout = 10 * time.Second
-	hm.cfg.HTTP.ShutdownTimeout = 30 * time.Second
+	config.Subset("HTTP").Bind(m.cfg.HTTP)
 
-	config.Subset("HTTP").Bind(&hm.cfg.HTTP)
-
-	return hm
+	return m
 }
 
-func (m *module) Config() (interface{}, error) {
-	return &m.cfg, nil
+func (m *module) Config() (any, error) {
+	return m.cfg, nil
 }
 
 func (m *module) Start(ctx context.Context) error {
@@ -92,9 +100,6 @@ func (m *module) Start(ctx context.Context) error {
 		})
 	})
 
-	// TODO: These 3 routes probably need to be protected on specific addresses/ranges only
-	// for now, they are open to the world, which might not be a great idea
-
 	// tracing
 	// TODO: add cloud flare headers as span attributes
 	// Cf-Ray (ID)
@@ -103,8 +108,13 @@ func (m *module) Start(ctx context.Context) error {
 	// Cf-Warp-Tag-Id
 	router.Use(otelmux.Middleware(application.FromContext(ctx).Name))
 
+	// TODO: These routes might need to be protected on specific addresses/ranges only
+	// for now, they are open to the world, which might not be a great idea
+
 	// prometheus metrics endpoint
 	// TODO: Need metrics for mux as the otel gorilla mux doesn't do metrics :/
+	// -     I did check a few implementations, and they don't seem to handle all of the cases for the response writer when gathering metrics
+	// -     The http snooper is a better option than all of these rando statswriter http.ResponseWriter iemplmentations
 	router.Handle("/metrics", promhttp.Handler())
 
 	// health check endpoint
