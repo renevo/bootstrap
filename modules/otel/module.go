@@ -20,22 +20,23 @@ import (
 )
 
 type module struct {
+	cfg            *cfg
 	metricExporter *prometheus.Exporter
 	spanProcessor  sdktrace.SpanProcessor
 	traceExporter  *otlptrace.Exporter
+}
 
-	cfg struct {
-		Addr string `env:"OTEL_GRPC_ADDRESS"`
-	}
+type cfg struct {
+	Addr string `config:"otel_grpc_address,optional" env:"OTEL_GRPC_ADDRESS"`
 }
 
 // New returns an application module that will wire up the trace exporter as per configured in the environment
 func New() application.Module {
-	return &module{}
+	return &module{cfg: &cfg{}}
 }
 
-func (m *module) Config() (interface{}, error) {
-	return &m.cfg, nil
+func (m *module) Config() (any, error) {
+	return m.cfg, nil
 }
 
 func (m *module) Start(ctx context.Context) error {
