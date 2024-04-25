@@ -13,7 +13,9 @@ import (
 	"github.com/portcullis/application"
 	"github.com/renevo/bootstrap/modules/env"
 	"github.com/renevo/bootstrap/modules/http"
+	"github.com/renevo/bootstrap/modules/nats"
 	"github.com/renevo/bootstrap/modules/otel"
+	"github.com/renevo/ioc"
 )
 
 // HTTP bootstraps a new http application and runs it
@@ -74,6 +76,7 @@ func HTTP(name, version string, content gohttp.FileSystem, opts ...application.O
 	app.Controller.Add("Environment", env.New("", map[string]string{}))
 	app.Controller.Add("Telemetry", otel.New())
 	app.Controller.Add("HTTP", http.New(content))
+	app.Controller.Add("NATS", nats.New())
 
 	// if we have a configuration file, then pass it in to get parsed/processed
 	if *cfgFile != "" {
@@ -89,6 +92,9 @@ func HTTP(name, version string, content gohttp.FileSystem, opts ...application.O
 	app.Logger = app.Logger.With("app", name)
 	slog.SetDefault(app.Logger)
 
+	// create a new context with the ioc container
+	ctx := ioc.WithContext(context.Background(), &ioc.Container{})
+
 	// run the app
-	return app.Run(context.Background())
+	return app.Run(ctx)
 }
