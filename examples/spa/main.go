@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/portcullis/application"
 	"github.com/renevo/bootstrap"
 	"github.com/renevo/bootstrap/modules/spa"
+	"github.com/renevo/bootstrap/pkg/application"
 )
 
 //go:embed static/***

@@ -14,9 +14,9 @@ import (
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
-	"github.com/portcullis/application"
-	"github.com/portcullis/config"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/renevo/bootstrap/pkg/application"
+	"github.com/renevo/bootstrap/pkg/config"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 )
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/portcullis/application"
+	"github.com/renevo/bootstrap/pkg/application"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"

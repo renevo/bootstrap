@@ -13,8 +13,8 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/gorilla/mux"
-	"github.com/portcullis/application"
 	"github.com/renevo/bootstrap"
+	"github.com/renevo/bootstrap/pkg/application"
 )
 
 //go:embed static/***
