@@ -10,11 +10,11 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"github.com/portcullis/application"
 	"github.com/renevo/bootstrap/modules/env"
 	"github.com/renevo/bootstrap/modules/http"
 	"github.com/renevo/bootstrap/modules/nats"
 	"github.com/renevo/bootstrap/modules/otel"
+	"github.com/renevo/application"
 	"github.com/renevo/ioc"
 )
 

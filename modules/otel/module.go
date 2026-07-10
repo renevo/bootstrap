@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/portcullis/application"
+	"github.com/renevo/application"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -16,6 +16,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
@@ -67,10 +68,19 @@ func (m *module) Start(ctx context.Context) error {
 
 	// tracing
 	if m.cfg.Addr != "" {
-		conn, err := grpc.DialContext(ctx, m.cfg.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
-
+		conn, err := grpc.NewClient(m.cfg.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
-			return fmt.Errorf("failed to connect to %q grpc collector: %w", m.cfg.Addr, err)
+			return fmt.Errorf("failed to create grpc collector connection: %w", err)
+		}
+
+		conn.Connect()
+		connectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		for state := conn.GetState(); state != connectivity.Ready; state = conn.GetState() {
+			if !conn.WaitForStateChange(connectCtx, state) {
+				return fmt.Errorf("timed out connecting to %q grpc collector", m.cfg.Addr)
+			}
 		}
 
 		traceExporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))

@@ -2,6 +2,8 @@
 
 Package to bootstrap my projects, this really just takes care of a lot of the duplicate work, so I don't need to do it every single time.
 
+Built and tested with Go 1.26+.
+
 ## Usage
 
 Use at your own risk, not intended for external usage, but hey, its on the internet.
