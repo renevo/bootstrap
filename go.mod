@@ -12,7 +12,7 @@ require (
 	github.com/mattn/go-isatty v0.0.22
 	github.com/nats-io/nats.go v1.52.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/renevo/application v0.2.1-0.20260710050508-ae0c014e1a9f
+	github.com/renevo/application v0.2.1
 	github.com/renevo/config v0.2.0
 	github.com/renevo/ioc v1.1.0
 	go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux v0.69.0

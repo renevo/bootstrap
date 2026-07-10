@@ -71,8 +71,8 @@ github.com/prometheus/otlptranslator v1.0.0 h1:s0LJW/iN9dkIH+EnhiD3BlkkP5QVIUVEo
 github.com/prometheus/otlptranslator v1.0.0/go.mod h1:vRYWnXvI6aWGpsdY/mOT/cbeVRBlPWtBNDb7kGR3uKM=
 github.com/prometheus/procfs v0.21.1 h1:GljZCt+zSTS+NZq88cyQ1LjZ+RCHp3uVuabBWA5+OJI=
 github.com/prometheus/procfs v0.21.1/go.mod h1:aB55Cww9pdSJVHk0hUf0inxWyyjPogFIjmHKYgMKmtY=
-github.com/renevo/application v0.2.1-0.20260710050508-ae0c014e1a9f h1:95HjBcXEe78HahJ2JUJhI1F6fVf5YzYIslhZnrEjpOA=
-github.com/renevo/application v0.2.1-0.20260710050508-ae0c014e1a9f/go.mod h1:yQ2Xbr7pBKOxb7Epu2IBhd83rslLvNI2NurlOR6GRPU=
+github.com/renevo/application v0.2.1 h1:J9QLPsKhyb91F/k4OjuECeTh4ZFJApg/peQOOWd6QbI=
+github.com/renevo/application v0.2.1/go.mod h1:yQ2Xbr7pBKOxb7Epu2IBhd83rslLvNI2NurlOR6GRPU=
 github.com/renevo/config v0.2.0 h1:BVPiAAlFGthy8/jzuiB9EI19Ek8CH0rpKOS6Hh3Um64=
 github.com/renevo/config v0.2.0/go.mod h1:jZH+26Zj++9Yq+iRLIeIuUiC+2+gG5MABObah6Jk0Pc=
 github.com/renevo/ioc v1.1.0 h1:U4gh+0SYc9tZIBFj0BP8arIvzsPeGJt0BbKiApQgVHM=
