@@ -31,6 +31,6 @@ jobs:
         run: go test -v -cover ./...
 
       - name: Linter
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
