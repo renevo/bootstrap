@@ -209,7 +209,9 @@ func (m *module) PostStart(ctx context.Context) error {
 func (m *module) Stop(ctx context.Context) error {
 	// no more new connections
 	if m.listener != nil {
-		m.listener.Close()
+		if err := m.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+			return fmt.Errorf("failed to close listener: %w", err)
+		}
 		m.listener = nil
 	}
 
