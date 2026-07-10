@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/caarlos0/env/v9"
-	"github.com/renevo/bootstrap/pkg/application"
+	"github.com/renevo/application"
 )
 
 type module struct {

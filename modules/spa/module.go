@@ -9,7 +9,7 @@ import (
 
 	"github.com/felixge/httpsnoop"
 	"github.com/gorilla/mux"
-	"github.com/renevo/bootstrap/pkg/application"
+	"github.com/renevo/application"
 )
 
 // New will return a Single Page Application module to serve the supplied index

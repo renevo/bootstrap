@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/nats-io/nats.go"
-	"github.com/renevo/bootstrap/pkg/application"
+	"github.com/renevo/application"
 	"github.com/renevo/ioc"
 )
 

@@ -14,7 +14,7 @@ import (
 	"github.com/renevo/bootstrap/modules/http"
 	"github.com/renevo/bootstrap/modules/nats"
 	"github.com/renevo/bootstrap/modules/otel"
-	"github.com/renevo/bootstrap/pkg/application"
+	"github.com/renevo/application"
 	"github.com/renevo/ioc"
 )
 
