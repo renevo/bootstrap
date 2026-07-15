@@ -1,9 +1,9 @@
+// Package nats provides an application module that connects to a NATS server
+// and registers the connection with the application's IoC context.
 package nats
 
 import (
-	"context"
 	"fmt"
-	"log/slog"
 	"os"
 
 	"github.com/nats-io/nats.go"
@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	_ application.Module       = (*module)(nil)
-	_ application.Configurable = (*module)(nil)
-	_ application.Initializer  = (*module)(nil)
+	_ application.Module      = (*module)(nil)
+	_ application.PreStarter  = (*module)(nil)
+	_ application.PreStopper  = (*module)(nil)
+	_ application.Initializer = (*module)(nil)
 )
 
 type module struct {
@@ -23,11 +24,11 @@ type module struct {
 	clientOpts []nats.Option
 }
 
+// New returns a NATS application module. The module remains inactive when no
+// server address is configured.
 func New() application.Module {
 	m := &module{
-		cfg: &cfg{
-			NATS: &natsConfig{},
-		},
+		cfg: &cfg{},
 		clientOpts: []nats.Option{
 			nats.RetryOnFailedConnect(true), // always set
 		},
@@ -36,56 +37,64 @@ func New() application.Module {
 	return m
 }
 
-func (m *module) Config() (any, error) {
-	return m.cfg, nil
+func (m *module) Initialize(ctx *application.Context) error {
+	return ctx.Settings().Subset("nats").Bind(m.cfg)
 }
 
-func (m *module) Initialize(ctx context.Context) (context.Context, error) {
-	if m.cfg.NATS.Addr == "" {
-		return ctx, nil
+func (m *module) PreStart(ctx *application.Context) error {
+	if m.cfg.Addr == "" {
+		return nil
 	}
 
-	if m.cfg.NATS.Name != "" {
-		m.clientOpts = append(m.clientOpts, nats.Name(m.cfg.NATS.Name))
+	app := ctx.Application()
+
+	// TODO: make this way more configurable, but for now just set the name and token/secret if provided
+
+	if m.cfg.Name != "" {
+		m.clientOpts = append(m.clientOpts, nats.Name(m.cfg.Name))
 	} else {
-		m.clientOpts = append(m.clientOpts, nats.Name(fmt.Sprintf("%s-%d", application.FromContext(ctx).Name, os.Getpid())))
+		m.clientOpts = append(m.clientOpts, nats.Name(fmt.Sprintf("%s-%d", app.Name(), os.Getpid())))
 	}
 
-	if m.cfg.NATS.Token != "" {
-		if m.cfg.NATS.Secret != "" {
-			m.clientOpts = append(m.clientOpts, nats.UserJWTAndSeed(m.cfg.NATS.Token, m.cfg.NATS.Secret))
+	if m.cfg.Token != "" {
+		if m.cfg.Secret != "" {
+			m.clientOpts = append(m.clientOpts, nats.UserJWTAndSeed(m.cfg.Token, m.cfg.Secret))
 		} else {
-			m.clientOpts = append(m.clientOpts, nats.Token(m.cfg.NATS.Token))
+			m.clientOpts = append(m.clientOpts, nats.Token(m.cfg.Token))
 		}
 	}
 
-	if m.cfg.NATS.CredentialsFile != "" {
-		m.clientOpts = append(m.clientOpts, nats.UserCredentials(m.cfg.NATS.CredentialsFile))
+	if m.cfg.CredentialsFile != "" {
+		m.clientOpts = append(m.clientOpts, nats.UserCredentials(m.cfg.CredentialsFile))
 	}
 
-	log := slog.With("module", "nats")
+	logger := ctx.Logger()
 
-	nc, err := nats.Connect(m.cfg.NATS.Addr, m.clientOpts...)
+	nc, err := nats.Connect(m.cfg.Addr, m.clientOpts...)
 	if err != nil {
-		return ctx, fmt.Errorf("failed to connect to nats server: %w", err)
+		return fmt.Errorf("failed to connect to nats server: %w", err)
 	}
 
 	m.client = nc
 	ioc.RegisterToContext(ctx, m.client)
 
-	log.Info("Connected to NATS server", "address", m.client.ConnectedAddr())
+	logger.Info("Connected to NATS server", "address", m.client.ConnectedAddr())
 
-	return ctx, nil
-}
-
-func (m *module) Start(ctx context.Context) error {
 	return nil
 }
 
-func (m *module) Stop(ctx context.Context) error {
+func (m *module) Start(ctx *application.Context) error {
+	return nil
+}
+
+func (m *module) PreStop(ctx *application.Context) error {
 	if m.client == nil {
 		return nil
 	}
 
 	return m.client.Drain()
+}
+
+func (m *module) Stop(ctx *application.Context) error {
+	return nil
 }

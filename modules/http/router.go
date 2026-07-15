@@ -6,8 +6,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// Routable modules support gorilla mux routes being handled
+// Routable is implemented by application modules that register HTTP routes or
+// middleware with the shared Gorilla Mux router.
 type Routable interface {
-	// Route will be called in the Start phase of the application bootstrap to add handlers/middleware for the supplied mux.Router
+	// Route registers handlers or middleware during the HTTP module's Start
+	// phase. Returning an error prevents the application from starting.
 	Route(ctx context.Context, router *mux.Router) error
 }

@@ -1,3 +1,6 @@
+// Package http provides an application module backed by a Gorilla Mux HTTP
+// server. It includes request logging, panic recovery, OpenTelemetry tracing,
+// health and Prometheus endpoints, and optional static file serving.
 package http
 
 import (
@@ -5,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -16,7 +18,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/renevo/application"
-	"github.com/renevo/config"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 )
 
@@ -28,31 +29,33 @@ type module struct {
 }
 
 type cfg struct {
-	HTTP *httpConfig `config:"http,block"`
+	HTTP httpConfig `config:"http,block"`
 }
 
 type httpConfig struct {
-	Addr            string        `config:"address,label" env:"HTTP_ADDRESS" flag:"address" setting:"Address" description:"The address to listen for the http server"`
-	ReadTimeout     time.Duration `config:"read_timeout,optional"`
-	WriteTimeout    time.Duration `config:"write_timeout,optional"`
-	IdleTimeout     time.Duration `config:"idle_timeout,optional"`
-	ShutdownTimeout time.Duration `config:"shutdown_timeout,optional"`
-	CertificateFile string        `config:"cert_file,optional" env:"HTTPS_CERTIFICATE" flag:"sslcert" description:"File location for the ssl certificate file"`
-	KeyFile         string        `config:"key_file,optional" env:"HTTPS_KEY" flag:"sslkey" description:"File location for the ssl certificate key file"`
+	Addr            string        `setting:"address" description:"The address to listen for the http server"`
+	ReadTimeout     time.Duration `setting:"read_timeout" description:"The maximum duration for reading the entire request, including the body"`
+	WriteTimeout    time.Duration `setting:"write_timeout" description:"The maximum duration for writing the response"`
+	IdleTimeout     time.Duration `setting:"idle_timeout" description:"The maximum duration for keeping idle connections open"`
+	ShutdownTimeout time.Duration `setting:"shutdown_timeout" description:"The maximum duration for shutting down the server gracefully"`
+	CertificateFile string        `setting:"cert_file" description:"File location for the ssl certificate file"`
+	KeyFile         string        `setting:"key_file" description:"File location for the ssl certificate key file"`
 }
 
 var (
-	_ application.PostStarter  = (*module)(nil)
-	_ application.Configurable = (*module)(nil)
-	_ application.Module       = (*module)(nil)
+	_ application.PostStarter = (*module)(nil)
+	_ application.PreStopper  = (*module)(nil)
+	_ application.Module      = (*module)(nil)
+	_ application.Initializer = (*module)(nil)
 )
 
-// New creates a new HTTP server and serves up the specified optional file system at the root
+// New returns an HTTP server module. When content is non-nil, the module serves
+// it from the root path after routes registered by Routable modules.
 func New(content http.FileSystem) application.Module {
 	m := &module{
 		content: content,
 		cfg: &cfg{
-			&httpConfig{
+			HTTP: httpConfig{
 				Addr:            ":8080",
 				IdleTimeout:     120 * time.Second,
 				ReadTimeout:     5 * time.Second,
@@ -62,19 +65,17 @@ func New(content http.FileSystem) application.Module {
 		},
 	}
 
-	config.Subset("HTTP").Bind(m.cfg.HTTP)
-
 	return m
 }
 
-func (m *module) Config() (any, error) {
-	return m.cfg, nil
+func (m *module) Initialize(ctx *application.Context) error {
+	return ctx.Settings().Bind(m.cfg)
 }
 
-func (m *module) Start(ctx context.Context) error {
-	app := application.FromContext(ctx)
-	serverName := app.Name
-	serverVersion := app.Version
+func (m *module) Start(ctx *application.Context) error {
+	app := ctx.Application()
+	serverName := app.Name()
+	serverVersion := app.Version()
 
 	router := mux.NewRouter()
 
@@ -106,7 +107,7 @@ func (m *module) Start(ctx context.Context) error {
 	// Cf-Ipcountry
 	// Cf-Connecting-Ip
 	// Cf-Warp-Tag-Id
-	router.Use(otelmux.Middleware(application.FromContext(ctx).Name))
+	router.Use(otelmux.Middleware(app.Name()))
 
 	// TODO: These routes might need to be protected on specific addresses/ranges only
 	// for now, they are open to the world, which might not be a great idea
@@ -125,19 +126,17 @@ func (m *module) Start(ctx context.Context) error {
 	// route registrations from other modules
 	var registrationErr error
 
-	app.Controller.Range(func(name string, appMod application.Module) bool {
-		routable, ok := appMod.(Routable)
+	for name, mod := range app.Modules() {
+		routable, ok := mod.(Routable)
 		if !ok {
-			return true
+			continue
 		}
 
 		if err := routable.Route(ctx, router); err != nil {
 			registrationErr = fmt.Errorf("failed to route for module %q: %w", name, err)
-			return false
+			break
 		}
-
-		return true
-	})
+	}
 
 	if registrationErr != nil {
 		return registrationErr
@@ -151,7 +150,8 @@ func (m *module) Start(ctx context.Context) error {
 	return nil
 }
 
-func (m *module) PostStart(ctx context.Context) error {
+func (m *module) PostStart(ctx *application.Context) error {
+	logger := ctx.Logger()
 	// listener
 	// TODO: support unix://
 	listener, err := net.Listen("tcp", m.cfg.HTTP.Addr)
@@ -168,9 +168,9 @@ func (m *module) PostStart(ctx context.Context) error {
 	isHTTPS := m.cfg.HTTP.CertificateFile != "" && m.cfg.HTTP.KeyFile != ""
 
 	if isHTTPS {
-		slog.Info("HTTPS Server Listening", "url", fmt.Sprintf("https://%s", m.listener.Addr().String()))
+		logger.Info("HTTPS Server Listening", "url", fmt.Sprintf("https://%s", m.listener.Addr().String()))
 	} else {
-		slog.Info("HTTP Server Listening", "url", fmt.Sprintf("http://%s", m.listener.Addr().String()))
+		logger.Info("HTTP Server Listening", "url", fmt.Sprintf("http://%s", m.listener.Addr().String()))
 	}
 
 	go func() {
@@ -193,12 +193,12 @@ func (m *module) PostStart(ctx context.Context) error {
 
 			app := application.FromContext(ctx)
 			if app != nil {
-				app.Exit(fmt.Errorf("http server failed to serve: %w", err))
+				_ = app.Exit(fmt.Errorf("http server failed to serve: %w", err))
 				return
 			}
 
 			// can't gracefully shutdown, so just die
-			slog.Error("HTTP Serve Failure", "err", err)
+			logger.Error("HTTP Serve Failure", "err", err)
 			os.Exit(1)
 		}
 	}()
@@ -206,7 +206,10 @@ func (m *module) PostStart(ctx context.Context) error {
 	return nil
 }
 
-func (m *module) Stop(ctx context.Context) error {
+func (m *module) PreStop(ctx *application.Context) error {
+	logger := ctx.Logger()
+	logger.InfoContext(ctx, "Stopping HTTP Server")
+
 	// no more new connections
 	if m.listener != nil {
 		if err := m.listener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
@@ -217,7 +220,7 @@ func (m *module) Stop(ctx context.Context) error {
 
 	// stop http server
 	if m.server != nil {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), m.cfg.HTTP.ShutdownTimeout)
+		shutdownCtx, cancel := context.WithTimeout(ctx, m.cfg.HTTP.ShutdownTimeout)
 		defer cancel()
 
 		_ = m.server.Shutdown(shutdownCtx)
@@ -226,6 +229,10 @@ func (m *module) Stop(ctx context.Context) error {
 		m.server = nil
 	}
 
+	return nil
+}
+
+func (m *module) Stop(ctx *application.Context) error {
 	return nil
 }
 

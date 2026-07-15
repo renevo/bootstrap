@@ -1,3 +1,5 @@
+// Package spa provides an application module that falls back to an index file
+// for missing HTML routes in a single-page application.
 package spa
 
 import (
@@ -12,7 +14,9 @@ import (
 	"github.com/renevo/application"
 )
 
-// New will return a Single Page Application module to serve the supplied index
+// New returns a single-page application module that serves index from fs when
+// another handler returns a not-found response for a request accepting HTML.
+// An empty index defaults to "index.html".
 func New(index string, fs fs.FS) application.Module {
 	return &module{fs, index}
 }
@@ -22,8 +26,8 @@ type module struct {
 	index string
 }
 
-func (m *module) Start(ctx context.Context) error { return nil }
-func (m *module) Stop(ctx context.Context) error  { return nil }
+func (m *module) Start(ctx *application.Context) error { return nil }
+func (m *module) Stop(ctx *application.Context) error  { return nil }
 func (m *module) Route(ctx context.Context, router *mux.Router) error {
 	if m.index == "" {
 		m.index = "index.html"
