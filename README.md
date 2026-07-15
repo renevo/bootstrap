@@ -1,8 +1,17 @@
 # Bootstrap
 
+[![CI](https://github.com/renevo/bootstrap/actions/workflows/ci.yaml/badge.svg)](https://github.com/renevo/bootstrap/actions/workflows/ci.yaml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/renevo/bootstrap.svg)](https://pkg.go.dev/github.com/renevo/bootstrap)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/renevo/bootstrap?logo=go)](go.mod)
+[![License](https://img.shields.io/github/license/renevo/bootstrap)](LICENSE)
+
 Bootstrap assembles and runs an HTTP application with structured logging,
 configuration, OpenTelemetry, optional NATS connectivity, and static file
 serving. It requires Go 1.26 or later.
+
+> [!WARNING]
+> Bootstrap is pre-release software until version 1.0. APIs and behavior may
+> change without notice. Use it at your own risk, both before and after 1.0.
 
 ## Usage
 
