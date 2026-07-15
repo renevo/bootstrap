@@ -10,15 +10,23 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
-	"github.com/renevo/bootstrap/modules/env"
+	"github.com/renevo/application"
 	"github.com/renevo/bootstrap/modules/http"
 	"github.com/renevo/bootstrap/modules/nats"
 	"github.com/renevo/bootstrap/modules/otel"
-	"github.com/renevo/application"
+	"github.com/renevo/config"
 	"github.com/renevo/ioc"
 )
 
-// HTTP bootstraps a new http application and runs it
+// HTTP creates and runs an HTTP application with the standard telemetry, NATS,
+// and HTTP modules. Content may be nil when the application does not serve
+// static files. Additional options are applied after the standard options.
+//
+// HTTP reads command-line flags from flag.CommandLine and configuration from
+// the environment. When the -config flag is set, the named configuration file
+// is loaded before the environment, allowing environment values to override
+// file values. The application runs until it receives a termination signal or
+// encounters an error.
 func HTTP(name, version string, content gohttp.FileSystem, opts ...application.Option) error {
 	// initialize flags before constructing modules to allow them to register config
 	// see if any flags have been added to the default flagset
@@ -36,6 +44,7 @@ func HTTP(name, version string, content gohttp.FileSystem, opts ...application.O
 	debugFlag := flag.CommandLine.Bool("debug", false, "Enable application debug logging output")
 	jsonFlag := flag.CommandLine.Bool("json", false, "Enable JSON logging output")
 	noColorFlag := flag.CommandLine.Bool("no-color", false, "Disable colorized output on text")
+	generateConfig := flag.CommandLine.Bool("generate-config", false, "Generate a default configuration file and exit")
 
 	// parse them
 	if !flag.CommandLine.Parsed() {
@@ -55,7 +64,7 @@ func HTTP(name, version string, content gohttp.FileSystem, opts ...application.O
 	case *noColorFlag:
 		logHandler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: &logLeveler})
 	default:
-		logHandler = tint.NewHandler(colorable.NewColorable(logOutput), &tint.Options{
+		logHandler = tint.NewTextHandler(colorable.NewColorable(logOutput), &tint.Options{
 			Level:   &logLeveler,
 			NoColor: !isatty.IsTerminal(logOutput.Fd()),
 		})
@@ -65,36 +74,46 @@ func HTTP(name, version string, content gohttp.FileSystem, opts ...application.O
 		logLeveler.Set(slog.LevelDebug)
 	}
 
-	// initialize the application
-	app := &application.Application{
-		Name:       name,
-		Version:    version,
-		Controller: &application.Controller{},
-		Logger:     slog.New(logHandler),
+	logger := slog.New(logHandler).With("version", version)
+
+	bootstrapOpts := []application.Option{
+		application.WithLogger(logger),
 	}
 
-	app.Controller.Add("Environment", env.New("", map[string]string{}))
-	app.Controller.Add("Telemetry", otel.New())
-	app.Controller.Add("HTTP", http.New(content))
-	app.Controller.Add("NATS", nats.New())
+	var configSources []config.Source
 
 	// if we have a configuration file, then pass it in to get parsed/processed
 	if *cfgFile != "" {
-		application.WithConfigFile(*cfgFile)(app)
+		configSources = []config.Source{application.ConfigFileSource(*cfgFile), config.EnvironmentSource("")}
+	} else {
+		configSources = []config.Source{config.EnvironmentSource("")}
 	}
 
-	// process the provided app options
-	for _, opt := range opts {
-		opt(app)
-	}
-
-	// add the application name to all logs on this logger
-	app.Logger = app.Logger.With("app", name)
-	slog.SetDefault(app.Logger)
+	bootstrapOpts = append(bootstrapOpts,
+		application.WithConfigSources(configSources...),
+		application.WithModule("Telemetry", otel.New()),
+		application.WithModule("NATS", nats.New()),
+		application.WithModule("HTTP", http.New(content)),
+	)
 
 	// create a new context with the ioc container
 	ctx := ioc.WithContext(context.Background(), &ioc.Container{})
 
+	app, err := application.New(name, version, append(bootstrapOpts, opts...)...)
+	if err != nil {
+		return err
+	}
+
+	slog.SetDefault(app.Logger())
+
+	if *generateConfig {
+		if err := app.WriteConfigTemplate(ctx, os.Stdout); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	// run the app
-	return app.Run(ctx)
+	return app.Run(ctx, application.WithSignals())
 }

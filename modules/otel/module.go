@@ -1,3 +1,5 @@
+// Package otel provides an application module that configures OpenTelemetry
+// metrics and tracing for a bootstrap application.
 package otel
 
 import (
@@ -20,6 +22,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+var (
+	_ application.Module      = (*module)(nil)
+	_ application.PreStarter  = (*module)(nil)
+	_ application.PostStopper = (*module)(nil)
+)
+
 type module struct {
 	cfg            *cfg
 	metricExporter *prometheus.Exporter
@@ -28,19 +36,27 @@ type module struct {
 }
 
 type cfg struct {
-	Addr string `config:"otel_grpc_address,optional" env:"OTEL_GRPC_ADDRESS"`
+	GRPC struct {
+		Address string `setting:"address" description:"The address of the OTEL gRPC collector to send traces to"`
+	}
 }
 
-// New returns an application module that will wire up the trace exporter as per configured in the environment
+// New returns an OpenTelemetry application module. It always registers a
+// Prometheus metrics exporter and configures OTLP trace export when a gRPC
+// collector address is set.
 func New() application.Module {
 	return &module{cfg: &cfg{}}
 }
 
-func (m *module) Config() (any, error) {
-	return m.cfg, nil
+func (m *module) Initialize(ctx *application.Context) error {
+	return ctx.Settings().Subset("otel").Bind(m.cfg)
 }
 
-func (m *module) Start(ctx context.Context) error {
+func (m *module) Start(ctx *application.Context) error {
+	return nil
+}
+
+func (m *module) PreStart(ctx *application.Context) error {
 	app := application.FromContext(ctx)
 	if app == nil {
 		return nil
@@ -49,8 +65,8 @@ func (m *module) Start(ctx context.Context) error {
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			// the service name used to display traces in backends
-			semconv.ServiceNameKey.String(app.Name),
-			semconv.ServiceVersionKey.String(app.Version),
+			semconv.ServiceNameKey.String(app.Name()),
+			semconv.ServiceVersionKey.String(app.Version()),
 		),
 	)
 	if err != nil {
@@ -67,8 +83,8 @@ func (m *module) Start(ctx context.Context) error {
 	otel.SetMeterProvider(metric.NewMeterProvider(metric.WithReader(m.metricExporter), metric.WithResource(res)))
 
 	// tracing
-	if m.cfg.Addr != "" {
-		conn, err := grpc.NewClient(m.cfg.Addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if m.cfg.GRPC.Address != "" {
+		conn, err := grpc.NewClient(m.cfg.GRPC.Address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			return fmt.Errorf("failed to create grpc collector connection: %w", err)
 		}
@@ -79,7 +95,7 @@ func (m *module) Start(ctx context.Context) error {
 
 		for state := conn.GetState(); state != connectivity.Ready; state = conn.GetState() {
 			if !conn.WaitForStateChange(connectCtx, state) {
-				return fmt.Errorf("timed out connecting to %q grpc collector", m.cfg.Addr)
+				return fmt.Errorf("timed out connecting to %q grpc collector", m.cfg.GRPC.Address)
 			}
 		}
 
@@ -105,8 +121,12 @@ func (m *module) Start(ctx context.Context) error {
 	return nil
 }
 
-func (m *module) Stop(ctx context.Context) error {
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+func (m *module) Stop(ctx *application.Context) error {
+	return nil
+}
+
+func (m *module) PostStop(ctx *application.Context) error {
+	shutdownCtx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
 	// shutdown span processor

@@ -13,8 +13,8 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/gorilla/mux"
-	"github.com/renevo/bootstrap"
 	"github.com/renevo/application"
+	"github.com/renevo/bootstrap"
 )
 
 //go:embed static/***
@@ -62,10 +62,10 @@ var _ bhttp.Routable = (*module)(nil)
 
 type module struct{}
 
-func (module) Start(ctx context.Context) error {
+func (module) Start(ctx *application.Context) error {
 	return nil
 }
-func (module) Stop(ctx context.Context) error {
+func (module) Stop(ctx *application.Context) error {
 	return nil
 }
 

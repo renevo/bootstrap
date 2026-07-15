@@ -1,1 +1,3 @@
-
+http {
+  address = "localhost:8080"
+}
