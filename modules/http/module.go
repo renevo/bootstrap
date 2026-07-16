@@ -142,7 +142,7 @@ func (m *module) Start(ctx *application.Context) error {
 
 	// static file hosting
 	if m.content != nil {
-		telemetry.staticRoute = router.PathPrefix("/").Handler(http.FileServer(m.content))
+		telemetry.staticRoute = router.PathPrefix("/").Handler(http.FileServer(m.content)).Methods(http.MethodGet, http.MethodHead)
 	}
 	if err := telemetry.configureFallbackHandlers(router); err != nil {
 		return fmt.Errorf("failed to configure HTTP telemetry: %w", err)

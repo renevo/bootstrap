@@ -49,7 +49,7 @@ func TestTelemetryStaticFile(t *testing.T) {
 			"one.txt": {Data: []byte("one")},
 			"two.txt": {Data: []byte("two")},
 		})
-		telemetry.staticRoute = router.PathPrefix("/").Handler(http.FileServer(content))
+		telemetry.staticRoute = router.PathPrefix("/").Handler(http.FileServer(content)).Methods(http.MethodGet, http.MethodHead)
 	})
 
 	for _, path := range []string{"/one.txt", "/two.txt"} {
@@ -69,6 +69,24 @@ func TestTelemetryStaticFile(t *testing.T) {
 	}
 	if count := metricRouteCount(t, reader, "StaticFile"); count != 2 {
 		t.Errorf("static file metric count = %d, want 2", count)
+	}
+}
+
+func TestTelemetryStaticFileMethodNotAllowed(t *testing.T) {
+	handler, recorder, reader := newTelemetryTestHandler(t, func(router *mux.Router, telemetry *telemetry) {
+		content := http.FS(fstest.MapFS{"one.txt": {Data: []byte("one")}})
+		telemetry.staticRoute = router.PathPrefix("/").Handler(http.FileServer(content)).Methods(http.MethodGet, http.MethodHead)
+	})
+
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/one.txt", nil))
+	if response.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusMethodNotAllowed)
+	}
+
+	assertSpanRoute(t, onlyEndedSpan(t, recorder), "POST StaticFile", "StaticFile")
+	if count := metricRouteCount(t, reader, "StaticFile"); count != 1 {
+		t.Errorf("static file metric count = %d, want 1", count)
 	}
 }
 
