@@ -63,8 +63,17 @@ uppercase setting path with separators replaced by underscores, such as
 ## HTTP
 
 The HTTP server listens on `:8080` by default. It includes request logging,
-panic recovery, proxy-header handling, and OpenTelemetry tracing. It also
-exposes these built-in endpoints:
+panic recovery, proxy-header handling, and OpenTelemetry tracing and metrics.
+Route templates are used for span names and the `http.route` metric dimension,
+so route parameters do not create unbounded telemetry. Static file requests use
+the synthetic `StaticFile` route. Not-found spans are named `{METHOD} 404`,
+while method-not-allowed requests retain the matched route template.
+
+When present, Cloudflare tunnel headers are added to spans as
+`cloudflare.tunnel.ray`, `cloudflare.tunnel.ipcountry`,
+`cloudflare.tunnel.connecting_ip`, and `cloudflare.tunnel.warp_tag_id`.
+
+The server also exposes these built-in endpoints:
 
 | Path | Description |
 | --- | --- |
@@ -121,8 +130,10 @@ Token, NKEY, and credentials-file authentication can be configured; use
 ## OpenTelemetry
 
 The OpenTelemetry module always installs a Prometheus metrics exporter used by
-the `/metrics` endpoint. Set `otel.grpc.address` or `OTEL_GRPC_ADDRESS` to
-export traces to an OTLP gRPC collector. The collector connection currently
-uses insecure transport credentials, so deploy it only across a trusted or
-separately secured connection.
+the `/metrics` endpoint. HTTP instrumentation emits standard server request
+duration, request body size, and response body size metrics. Set
+`otel.grpc.address` or `OTEL_GRPC_ADDRESS` to export traces to an OTLP gRPC
+collector. The collector connection currently uses insecure transport
+credentials, so deploy it only across a trusted or separately secured
+connection.
 
