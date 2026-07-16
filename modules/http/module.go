@@ -1,6 +1,6 @@
 // Package http provides an application module backed by a Gorilla Mux HTTP
-// server. It includes request logging, panic recovery, OpenTelemetry tracing,
-// health and Prometheus endpoints, and optional static file serving.
+// server. It includes request logging, panic recovery, OpenTelemetry tracing and
+// metrics, health and Prometheus endpoints, and optional static file serving.
 package http
 
 import (
@@ -18,7 +18,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/renevo/application"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type module struct {
@@ -78,6 +78,7 @@ func (m *module) Start(ctx *application.Context) error {
 	serverVersion := app.Version()
 
 	router := mux.NewRouter()
+	telemetry := newTelemetry()
 
 	// setup http server
 	m.server = &http.Server{
@@ -87,7 +88,11 @@ func (m *module) Start(ctx *application.Context) error {
 		BaseContext: func(net.Listener) context.Context {
 			return ctx
 		},
-		Handler: handlers.CombinedLoggingHandler(os.Stderr, handlers.ProxyHeaders(router)),
+		Handler: handlers.CombinedLoggingHandler(os.Stderr, handlers.ProxyHeaders(
+			otelhttp.NewHandler(telemetry.handler(router), app.Name(), otelhttp.WithSpanNameFormatter(func(_ string, r *http.Request) string {
+				return r.Method
+			})),
+		)),
 	}
 
 	// panic handling
@@ -101,21 +106,14 @@ func (m *module) Start(ctx *application.Context) error {
 		})
 	})
 
-	// tracing
-	// TODO: add cloud flare headers as span attributes
-	// Cf-Ray (ID)
-	// Cf-Ipcountry
-	// Cf-Connecting-Ip
-	// Cf-Warp-Tag-Id
-	router.Use(otelmux.Middleware(app.Name()))
+	// Route telemetry runs after mux selects a route and before application
+	// middleware, while the outer otelhttp handler captures every response.
+	router.Use(telemetry.middleware)
 
 	// TODO: These routes might need to be protected on specific addresses/ranges only
 	// for now, they are open to the world, which might not be a great idea
 
 	// prometheus metrics endpoint
-	// TODO: Need metrics for mux as the otel gorilla mux doesn't do metrics :/
-	// -     I did check a few implementations, and they don't seem to handle all of the cases for the response writer when gathering metrics
-	// -     The http snooper is a better option than all of these rando statswriter http.ResponseWriter iemplmentations
 	router.Handle("/metrics", promhttp.Handler())
 
 	// health check endpoint
@@ -144,7 +142,10 @@ func (m *module) Start(ctx *application.Context) error {
 
 	// static file hosting
 	if m.content != nil {
-		router.PathPrefix("/").Handler(http.FileServer(m.content))
+		telemetry.staticRoute = router.PathPrefix("/").Handler(http.FileServer(m.content)).Methods(http.MethodGet, http.MethodHead)
+	}
+	if err := telemetry.configureFallbackHandlers(router); err != nil {
+		return fmt.Errorf("failed to configure HTTP telemetry: %w", err)
 	}
 
 	return nil
