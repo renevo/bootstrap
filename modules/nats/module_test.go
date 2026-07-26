@@ -866,14 +866,11 @@ func serveHandshake(ctx context.Context, conn net.Conn, info []byte) {
 			return
 		}
 
-		switch {
-		case strings.HasPrefix(line, "PING"):
+		// every other client protocol line is accepted without a response
+		if strings.HasPrefix(line, "PING") {
 			if _, err := conn.Write([]byte("PONG\r\n")); err != nil {
 				return
 			}
-
-		case strings.HasPrefix(line, "PONG"), strings.HasPrefix(line, "CONNECT"), strings.HasPrefix(line, "SUB"), strings.HasPrefix(line, "UNSUB"):
-			// accepted without a response
 		}
 	}
 }
