@@ -124,8 +124,89 @@ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -sha256 -days 3
 
 The NATS module is inactive unless `nats.address` (or `NATS_ADDRESS`) is set.
 When connected, it registers the `*nats.Conn` with the application IoC context.
-Token, NKEY, and credentials-file authentication can be configured; use
+
+Initial connection retry is always enabled, so start-up succeeds even when the
+server is not yet reachable. The connection is registered while it is still
+reconnecting, and the module logs the pending status instead of failing. On
+shutdown the connection is drained, bounded by `nats.drain_timeout`.
+
+Provide secrets through protected environment variables or a protected
+configuration source rather than committed HCL. The `password`, `token`, and
+`secret` settings are masked in `-generate-config` output and are never logged.
+
+### Authentication
+
+Exactly one authentication mode may be configured.
+
+| Mode | Settings |
+| --- | --- |
+| Anonymous | none |
+| User/password | `nats.username` and `nats.password` (both required) |
+| Token | `nats.token` only |
+| JWT/seed | `nats.token` (JWT) and `nats.secret` (seed) |
+| Credentials file | `nats.credentials_file` |
+
+Combining modes, setting only one of username/password, or setting
+`nats.secret` without `nats.token` is a configuration error.
+
+```hcl
+nats {
+  address = "nats://nats.example.com:4222"
+  username = "app"
+  # password supplied by NATS_PASSWORD
+}
+```
+
+```bash
+NATS_ADDRESS=nats://nats.example.com:4222 \
+NATS_USERNAME=app \
+NATS_PASSWORD=... \
+go run .
+```
+
+### TLS
+
+Set `nats.root_ca_file` to verify the server against a private certificate
+authority. Set `nats.client_cert_file` and `nats.client_key_file` together for
+mutual TLS. Certificate verification is always performed; there is no
+insecure skip-verify setting.
+
+```hcl
+nats {
+  address = "tls://nats.example.com:4222"
+  root_ca_file = "/path/to/ca.pem"
+  client_cert_file = "/path/to/client.pem"
+  client_key_file = "/path/to/client-key.pem"
+}
+```
+
+### Connection settings
+
+The tunings below are initialized from the NATS client defaults.
+
+| Setting | Environment variable | Default | Description |
+| --- | --- | --- | --- |
+| `nats.connect_timeout` | `NATS_CONNECT_TIMEOUT` | `2s` | Dial timeout per server. |
+| `nats.reconnect_wait` | `NATS_RECONNECT_WAIT` | `2s` | Delay between reconnect attempts. |
+| `nats.max_reconnects` | `NATS_MAX_RECONNECTS` | `60` | Attempts per server; `-1` is unlimited and `0` disables reconnecting. |
+| `nats.ping_interval` | `NATS_PING_INTERVAL` | `2m` | Interval between client pings. |
+| `nats.max_pings_outstanding` | `NATS_MAX_PINGS_OUTSTANDING` | `2` | Unanswered pings before the connection is stale. |
+| `nats.drain_timeout` | `NATS_DRAIN_TIMEOUT` | `30s` | Bound on the graceful drain at shutdown. |
+
+Other environment variables follow the same pattern, such as `NATS_NAME`,
+`NATS_TOKEN`, `NATS_SECRET`, `NATS_CREDENTIALS_FILE`, `NATS_ROOT_CA_FILE`,
+`NATS_CLIENT_CERT_FILE`, and `NATS_CLIENT_KEY_FILE`. Run the application with
 `-generate-config` for the complete setting list.
+
+### Connection logging
+
+Connection lifecycle events are logged with structured fields. Initial
+connection, successful reconnection, and the expected shutdown close are logged
+at info level. Disconnects, failed reconnect attempts, and lame-duck mode are
+logged at warn level. Asynchronous subscription errors and an unexpected
+terminal close are logged at error level. Discovered-server changes are logged
+at debug level. Credentials are stripped from any logged server URL, and
+configuration values are never logged.
 
 ## OpenTelemetry
 
